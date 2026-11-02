@@ -47,6 +47,11 @@ body {
 html.is-locked,
 html.is-locked body { overflow: hidden; }
 
+/* Lenis smooth scrolling (services/scroll.js). */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+
 #app-container:focus { outline: none; }
 
 [hidden] { display: none !important; }
@@ -246,13 +251,19 @@ a:focus-visible {
 }
 
 /* Chapter title card on scene (e.g. Chapter 1: Rumah) */
-.caption--chapter-title {
+.caption__inner { display: block; }
+
+/* Layout lives on the inner wrapper (mouse parallax); the outer .caption gets scroll motion. */
+.caption--chapter-title .caption__inner {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-align: center;
   gap: 0.35rem;
+}
+
+.caption--chapter-title {
+  text-align: center;
   max-width: none !important;
   pointer-events: none;
   user-select: none;
@@ -324,7 +335,7 @@ a:focus-visible {
 .comic-panel {
   position: absolute;
   inset: 0;
-  visibility: hidden; /* GSAP autoAlpha shows it */
+  visibility: hidden; /* shown/hidden instantly by GSAP (autoAlpha set), never faded */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -742,7 +753,7 @@ a:focus-visible {
   justify-content: center;
   color: #fff;
   font-family: var(--font-display);
-  font-size: clamp(3.8rem, 2rem + 8.5vw, 9.5rem);
+  font-size: clamp(2.6rem, 1.4rem + 6vw, 6.5rem);
   font-weight: 400;
   line-height: 0.88;
   letter-spacing: 0.04em;

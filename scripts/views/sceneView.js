@@ -12,8 +12,10 @@
  * whole composition fits; on wider screens the box fills the width and the
  * camera pans down to camera.end.
  *
- * Parallax: at scroll progress p, layer y = push * (1 - p) - (cameraEnd + lift) * p.
- *   push = (depth - DEPTH_REF) * PUSH_FAR|PUSH_NEAR * stage height: far layers
+ * Parallax: at scroll progress p, layer y = (push - cameraStart) * (1 - p) - (cameraEnd + lift) * p.
+ *   cameraStart = where the camera begins (camera.startCenter centred on screen, e.g. the
+ *          boat; 0 = art top). Scroll length still uses the full cameraEnd, so timings hold.
+ *   push = (depth - DEPTH_REF) * PUSH_FAR|PUSH_NEAR * camera.spread * stage height: far layers
  *          start higher, near layers start much lower and surge up.
  *   lift = extra rise at the end for layers deeper than camera.liftFrom, up to
  *          camera.lift stage heights, capped by the art left below the screen
@@ -21,7 +23,11 @@
  *          screens; phone-shaped screens have no art below, so they land on the
  *          authored composition exactly.
  *
- * Pace: section height = height screens + camera travel * camera.pace (px, --scene-extra),
+ * Holds: the wave part is holdStart (art still, e.g. on the boat) + the camera move +
+ * holdEnd (art still on the waves), see wavePhases(). Captions with `phase` are timed
+ * within one of these parts.
+ *
+ * Pace: section height = height screens + camera travel (end - start) * camera.pace (px, --scene-extra),
  * re-measured on every ScrollTrigger refresh. Keeps motion per scroll px similar on
  * desktop (long camera pan) and phones (almost none).
  *
@@ -66,6 +72,10 @@ define([
   var MOUSE_REF = 0.35;
   var MOUSE_X = 44;
   var MOUSE_Y = 26;
+  // Only these are mouse-driven. unbindParallax kills just them: several targets (e.g.
+  // captions) also have scroll-timeline tweens (show/hide) that must survive.
+  var MOUSE_PROPS = 'x,y,rotate,rotateX,rotateY';
+  var NARRATION_DEPTH = 0.8; // mouse depth for screen-fixed captions (moves like the near waves)
 
   function formatBubbleDialog(text) {
     if (!text) { return ''; }
@@ -104,12 +114,12 @@ define([
     '      <div class="caption-group caption-group--anchor" style="bottom: <%- (1 - group.anchor.y) * 100 %>%">',
     '      <% _.each(group.items, function (c) { %>',
     '        <% if (c.type === "chapter-title") { %>',
-    '        <div class="caption caption--chapter-title" data-caption="<%- c.index %>">',
+    '        <div class="caption caption--chapter-title" data-caption="<%- c.index %>"><div class="caption__inner">',
     '          <span class="chapter-title__label"><%- c.label || "CHAPTER 1 :" %></span>',
     '          <h2 class="chapter-title__name"><%- c.title || c.text || "RUMAH" %></h2>',
-    '        </div>',
+    '        </div></div>',
     '        <% } else { %>',
-    '        <p class="caption" data-caption="<%- c.index %>"><%- c.text %></p>',
+    '        <p class="caption" data-caption="<%- c.index %>"><span class="caption__inner"><%- c.text %></span></p>',
     '        <% } %>',
     '      <% }); %>',
     '      </div>',
@@ -126,12 +136,12 @@ define([
     '  <% } %>',
     '    <% _.each(group.items, function (c) { %>',
     '      <% if (c.type === "chapter-title") { %>',
-    '      <div class="caption caption--chapter-title" data-caption="<%- c.index %>">',
+    '      <div class="caption caption--chapter-title" data-caption="<%- c.index %>"><div class="caption__inner">',
     '        <span class="chapter-title__label"><%- c.label || "CHAPTER 1 :" %></span>',
     '        <h2 class="chapter-title__name"><%- c.title || c.text || "RUMAH" %></h2>',
-    '      </div>',
+    '      </div></div>',
     '      <% } else { %>',
-    '      <p class="caption" data-caption="<%- c.index %>"><%- c.text %></p>',
+    '      <p class="caption" data-caption="<%- c.index %>"><span class="caption__inner"><%- c.text %></span></p>',
     '      <% } %>',
     '    <% }); %>',
     '    </div>',
@@ -258,7 +268,7 @@ define([
       this.$imgs = this.$('.layer__img');
       this.$shakes = this.$('.layer__shake');
       this.$layerMouses = this.$('.layer__mouse');
-      this.$chapterCaptions = this.$('.caption--chapter-title');
+      this.$chapterCaptions = this.$('.caption--chapter-title .caption__inner');
       this.whiteTransitionEl = this.$('.scene__white-transition')[0] || null;
       this.$panels = this.$('.comic-panel');
       this.bindBubbleFit();
@@ -328,11 +338,12 @@ define([
     sizeScene: function () {
       this.fitBubbleText();
       var stageH = this.stageEl.clientHeight;
-      var extra = this.cameraEnd() * this.model.get('camera').pace;
+      var cam = this.model.get('camera');
+      var extra = this.cameraTravel() * cam.pace + (cam.holdStart + cam.holdEnd) * stageH;
       var panels = this.model.get('panels');
       if (panels && panels.length) {
         var transDist = stageH * 0.4;
-        extra += transDist + this.panelsScrollDistance();
+        extra += (this.transitionStart() - this.waveScrollDistance()) + transDist + this.panelsScrollDistance();
       }
       this.el.style.setProperty('--scene-extra', Math.round(extra) + 'px');
     },
@@ -372,10 +383,21 @@ define([
     },
 
     // Scroll distance (px) of the wave part alone.
+    // Scroll distance (px) of the wave part: hold on the start frame, the camera move
+    // ((height - 1) screens + cameraEnd * pace), hold on the end frame.
     waveScrollDistance: function () {
+      var p = this.wavePhases();
+      return p.holdStart + p.move + p.holdEnd;
+    },
+
+    wavePhases: function () {
       var stageH = this.stageEl.clientHeight;
-      var extra = this.cameraEnd() * this.model.get('camera').pace;
-      return Math.max(0, (this.model.get('height') - 1) * stageH + extra);
+      var cam = this.model.get('camera');
+      return {
+        holdStart: cam.holdStart * stageH,
+        move: Math.max(0, (this.model.get('height') - 1) * stageH + this.cameraTravel() * cam.pace),
+        holdEnd: cam.holdEnd * stageH
+      };
     },
 
     // How far the camera has travelled (px) when the scene ends.
@@ -383,6 +405,23 @@ define([
       var artH = this.artEl.offsetHeight;
       var maxTravel = Math.max(0, artH - this.stageEl.clientHeight);
       return Math.min(maxTravel, this.model.get('camera').end * artH);
+    },
+
+    // How far the camera actually moves (px): start frame → end frame. camera.pace adds
+    // scroll for this distance only, so desktop (short boat → waves pan) scrolls about
+    // like a phone instead of paying for the skipped sky.
+    cameraTravel: function () {
+      return Math.max(0, this.cameraEnd() - this.cameraStart());
+    },
+
+    // Where the camera starts (px): camera.startCenter of the art centred on screen,
+    // clamped to the travel range. 0 when unset or when the art fits the screen.
+    cameraStart: function () {
+      var c = this.model.get('camera').startCenter;
+      if (!c) { return 0; }
+      var stageH = this.stageEl.clientHeight;
+      var y = c * this.artEl.offsetHeight - stageH / 2;
+      return Math.max(0, Math.min(this.cameraEnd(), y));
     },
 
     // Locked captions: screen y (px) where their art y sits when the scene ends.
@@ -400,23 +439,24 @@ define([
       var hasPanels = panels && panels.length > 0;
       var stageH = this.stageEl.clientHeight;
 
+      var waveDist = this.waveScrollDistance();
       if (!hasPanels) {
-        tl.to({}, { duration: 1 }, 0);
-        this.addLayerMotion(tl, 1);
-        this.addCaptions(tl, 1);
+        tl.to({}, { duration: Math.max(1, waveDist) }, 0);
+        this.addLayerMotion(tl);
+        this.addCaptions(tl, waveDist);
         return tl;
       }
 
-      var waveDist = this.waveScrollDistance();
       this.waveDist = waveDist;
+      var whiteAt = this.transitionStart();
       var transDist = stageH * 0.4;
       var panelsDist = this.panelsScrollDistance();
-      var totalDist = waveDist + transDist + panelsDist;
+      var totalDist = whiteAt + transDist + panelsDist;
 
       tl.to({}, { duration: totalDist }, 0);
-      this.addLayerMotion(tl, waveDist);
+      this.addLayerMotion(tl);
       this.addCaptions(tl, waveDist);
-      this.addPanelsMotion(tl, waveDist, transDist);
+      this.addPanelsMotion(tl, whiteAt, transDist);
       return tl;
     },
 
@@ -431,18 +471,21 @@ define([
     },
 
     // Layers and anchored captions: start pushed by depth, end at camera + lift.
-    addLayerMotion: function (tl, duration) {
-      duration = duration || 1;
+    // Motion runs only during the camera move; the art is still during holdStart/holdEnd.
+    addLayerMotion: function (tl) {
+      var phases = this.wavePhases();
+      var duration = Math.max(1, phases.move);
       var self = this;
       var layers = this.model.get('layers');
       var addDepthMotion = function (el, depth) {
         var startY = function () {
-          if (self.reduced) { return 0; }
+          if (self.reduced) { return -self.cameraStart(); }
           var rel = depth - DEPTH_REF;
-          return rel * (rel > 0 ? PUSH_NEAR : PUSH_FAR) * self.stageEl.clientHeight;
+          var spread = self.model.get('camera').spread;
+          return rel * (rel > 0 ? PUSH_NEAR : PUSH_FAR) * spread * self.stageEl.clientHeight - self.cameraStart();
         };
         var endY = function () { return -self.cameraEnd() - self.endLift(depth); };
-        tl.fromTo(el, { y: startY }, { y: endY, duration: duration }, 0);
+        tl.fromTo(el, { y: startY }, { y: endY, duration: duration }, phases.holdStart);
       };
       this.$layers.each(function (i, el) { addDepthMotion(el, layers[i].depth); });
       this.$('.caption-anchor').each(function (i, el) {
@@ -450,9 +493,53 @@ define([
       });
     },
 
-    // Page scroll (px) across the whole timeline: section height minus the pinned stage.
-    scrollDistance: function () {
-      return Math.max(0, this.el.offsetHeight - this.stageEl.clientHeight);
+    // Captions are timed by scroll progress: shown from `at` to `at + dur` of the wave
+    // part (or of its `phase`). No fade by default (user rule):
+    //   enter "scroll": slides up from below the screen to its spot, 1:1 with the page
+    //                   (one screen of scroll from `at`); otherwise appears in place.
+    //   exit "scroll":  from `at + dur` (at the earliest when the enter ends) slides up off
+    //                   the top, 1:1 with the page, then hides;
+    //                   otherwise disappears in place. A window reaching the end stays.
+    // `fade: true` opts into a fade instead. Mouse parallax moves .caption__inner, so
+    // it never fights these tweens on .caption.
+    // Absolute scroll window (px) of one caption: when it shows, when its exit starts,
+    // when it's gone. Shared by addCaptions and transitionStart.
+    captionWindow: function (c) {
+      var ph = this.wavePhases();
+      var wave = ph.holdStart + ph.move + ph.holdEnd;
+      var span = {
+        all: [0, wave],
+        start: [0, ph.holdStart],
+        move: [ph.holdStart, ph.move],
+        end: [ph.holdStart + ph.move, ph.holdEnd]
+      };
+      var screen = this.stageEl.clientHeight;
+      var at = span[c.phase][0] + c.at * span[c.phase][1];
+      var dur = c.dur * span[c.phase][1];
+      var entering = c.enter === 'scroll' && !this.reduced;
+      var enterLen = c.enterDur * screen;
+      var exitLen = c.exitDur * screen;
+      // Exit never starts before the enter finishes: a tiny dur = scroll straight
+      // through (rise in and keep going up, no stop), like text printed on the page.
+      var exitAt = Math.max(at + dur, at + (entering ? enterLen : 0));
+      var exitScroll = c.exit === 'scroll' && exitAt < wave - 1e-6;
+      return {
+        at: at, dur: dur, screen: screen, entering: entering, exitAt: exitAt, exitScroll: exitScroll,
+        enterLen: enterLen, exitLen: exitLen,
+        end: exitScroll ? exitAt + exitLen : at + dur
+      };
+    },
+
+    // Scroll (px) where the white transition starts: partway through the last
+    // cueTransition caption's scroll-out (so the white rises over the text as it
+    // leaves), else the wave part's end.
+    transitionStart: function () {
+      var cues = _.filter(this.model.get('captions'), function (c) { return c.cueTransition !== false; });
+      if (!cues.length) { return this.waveScrollDistance(); }
+      return _.max(_.map(cues, function (c) {
+        var w = this.captionWindow(c);
+        return w.exitScroll ? w.exitAt + c.cueTransition * w.exitLen : w.end;
+      }, this));
     },
 
     addCaptions: function (tl, waveDuration) {
@@ -461,28 +548,29 @@ define([
       var captions = this.model.get('captions');
       var rise = this.reduced ? 0 : CAPTION_RISE;
       var captionOf = function (el) { return captions[Number(el.getAttribute('data-caption'))]; };
+      var showWindow = function (el, at, dur) {
+        if (at > 0) {
+          gsap.set(el, { autoAlpha: 0 });
+          tl.set(el, { autoAlpha: 1 }, at);
+        }
+        if (at + dur < waveDuration - 1e-6) { tl.set(el, { autoAlpha: 0 }, at + dur); }
+      };
       this.$('.caption').each(function (i, el) {
         var c = captionOf(el);
-        var at = c.at * waveDuration;
-        var dur = c.dur * waveDuration;
-        if (c.exit === 'scroll') {
-          // Fade in in place, then travel up with the page until off the top. Scroll
-          // captions in a group hold their spot until the group's last `at`, then
-          // move together, so every line appears at the anchor with no gap.
-          var start = _.max(_.map($(el).siblings('.caption').addBack().get(), function (s) {
-            var sc = captionOf(s);
-            return sc.exit === 'scroll' ? sc.at * waveDuration : -Infinity;
-          }));
-          if (c.fade) { tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: CAPTION_FADE * waveDuration }, at); }
-          if (start < waveDuration) {
-            tl.fromTo(el, { y: 0 }, {
-              y: function () { return -(1 - (start / waveDuration)) * self.scrollDistance(); },
-              duration: waveDuration - start
-            }, start);
+        var w = self.captionWindow(c);
+        var at = w.at;
+        var dur = w.dur;
+        if (!c.fade) {
+          var travel = function () { return self.stageEl.clientHeight; };
+          showWindow(el, at, w.end - at);
+          if (w.entering) {
+            tl.fromTo(el, { y: travel }, { y: 0, duration: w.enterLen }, at);
+          }
+          if (w.exitScroll && !self.reduced) {
+            tl.fromTo(el, { y: 0 }, { y: function () { return -travel(); }, duration: w.exitLen, immediateRender: false }, w.exitAt);
           }
           return;
         }
-        if (!c.fade) { return; } // default: always visible, like comic text
         var fade = Math.min(CAPTION_FADE * waveDuration, dur / 3);
         tl.fromTo(el, { opacity: 0, y: rise }, { opacity: 1, y: 0, duration: fade }, at);
         if (at + dur < waveDuration) {
@@ -523,17 +611,17 @@ define([
         var holdStart = enterStart + dEnter;
         var exitStart = holdStart + dHold;
 
-        // Reset panel initial position below screen. autoAlpha (opacity + visibility)
-        // so off-screen panels aren't painted while the waves scroll.
+        // Panels are always fully opaque (no transparency while scrolling): they only
+        // slide. Off-screen they're hidden with an instant visibility switch (autoAlpha
+        // set, no fade) so they aren't painted while the waves scroll.
         gsap.set(el, { y: stageH, autoAlpha: 0 });
+        tl.set(el, { autoAlpha: 1 }, enterStart);
 
         // 1. Enter from bottom and lock in center (y: 0)
         tl.fromTo(el, {
-          y: function () { return self.stageEl.clientHeight; },
-          autoAlpha: 0
+          y: function () { return self.stageEl.clientHeight; }
         }, {
           y: 0,
-          autoAlpha: 1,
           duration: dEnter,
           ease: self.reduced ? 'none' : 'power1.out'
         }, enterStart);
@@ -547,22 +635,19 @@ define([
               rotateY: 26,
               rotateX: 4,
               scale: 0.88,
-              x: 30,
-              opacity: 0.15
+              x: 30
             });
 
             tl.fromTo(tiltEl, {
               rotateY: 26,
               rotateX: 4,
               scale: 0.88,
-              x: 30,
-              opacity: 0.15
+              x: 30
             }, {
               rotateY: 14,
               rotateX: 0,
               scale: 1.0,
               x: 0,
-              opacity: 1.0,
               duration: dEnter,
               ease: 'power2.out'
             }, enterStart);
@@ -588,45 +673,37 @@ define([
           if (tilt0 && tilt1) {
             if (!self.reduced) {
               // Frame 0 (Panel 13): starts with deep 3D tilt, enters with panel
-              gsap.set(tilt0, { rotateY: 26, scale: 0.9, x: 25, opacity: 0.3 });
+              gsap.set(tilt0, { rotateY: 26, scale: 0.9, x: 25 });
               tl.fromTo(tilt0, {
                 rotateY: 26,
                 scale: 0.9,
-                x: 25,
-                opacity: 0.3
+                x: 25
               }, {
                 rotateY: 13,
                 scale: 1.0,
                 x: 0,
-                opacity: 1.0,
                 duration: dEnter,
                 ease: 'power2.out'
               }, enterStart);
 
-              // Frame 1 (Panel 14): initially hidden, appears sequentially during hold
-              gsap.set(tilt1, {
-                rotateY: -26,
-                scale: 0.88,
-                y: 35,
-                x: -25,
-                opacity: 0
-              });
-
+              // Frame 1 (Panel 14): slides up from below the screen during the hold
+              // (fully opaque, no fade; hidden until it starts moving).
               var f1Start = holdStart + dHold * 0.26;
               var f1Dur = dHold * 0.42;
+              var f1FromY = function () { return self.stageEl.clientHeight * 0.75; };
 
+              gsap.set(tilt1, { rotateY: -26, scale: 0.88, y: stageH * 0.75, x: -25, autoAlpha: 0 });
+              tl.set(tilt1, { autoAlpha: 1 }, f1Start);
               tl.fromTo(tilt1, {
                 rotateY: -26,
                 scale: 0.88,
-                y: 35,
-                x: -25,
-                opacity: 0
+                y: f1FromY,
+                x: -25
               }, {
                 rotateY: -13,
                 scale: 1.0,
                 y: 0,
                 x: 0,
-                opacity: 1.0,
                 duration: f1Dur,
                 ease: 'power2.out'
               }, f1Start);
@@ -637,9 +714,9 @@ define([
                 tl.to(tilt1, { rotateY: -20, scale: 0.94, duration: dExit, ease: 'power1.in' }, exitStart);
               }
             } else {
-              // Reduced motion: simple sequential fade
-              gsap.set(tilt1, { opacity: 0 });
-              tl.fromTo(tilt1, { opacity: 0 }, { opacity: 1, duration: dHold * 0.4 }, holdStart + dHold * 0.3);
+              // Reduced motion: frame 1 just appears (no fade)
+              gsap.set(tilt1, { autoAlpha: 0 });
+              tl.set(tilt1, { autoAlpha: 1 }, holdStart + dHold * 0.3);
             }
           }
         }
@@ -675,14 +752,14 @@ define([
 
         // 3. Exit to top (or hold center for last panel)
         if (i < N - 1) {
+          tl.set(el, { autoAlpha: 0 }, exitStart + dExit);
           tl.to(el, {
             y: function () { return -self.stageEl.clientHeight; },
-            autoAlpha: 0,
             duration: dExit,
             ease: self.reduced ? 'none' : 'power1.in'
           }, exitStart);
         } else {
-          tl.to(el, { y: 0, autoAlpha: 1, duration: dExit }, exitStart);
+          tl.to(el, { y: 0, duration: dExit }, exitStart);
         }
 
         // Next panel starts entering at the exact moment this panel starts exiting
@@ -788,8 +865,8 @@ define([
       this.$narratives = this.$('.comic-narrative');
       this.$bubbleInners = this.$('.comic-bubble__inner');
       this.$layerMouses = this.$('.layer__mouse');
-      this.$chapterCaptions = this.$('.caption--chapter-title');
-      this.$anchorTexts = this.$('.caption-anchor .caption').not('.caption--chapter-title');
+      this.$chapterCaptions = this.$('.caption--chapter-title .caption__inner');
+      this.$anchorTexts = this.$('.caption').not('.caption--chapter-title').children('.caption__inner');
       if (!this.$frames.length && !this.$anchorTexts.length && !this.$narratives.length && !this.$bubbleInners.length && !this.$layerMouses.length) { return; }
 
       this.onPointerMoveBound = _.throttle(_.bind(this.onPointerMove, this), 16);
@@ -809,27 +886,27 @@ define([
         this.onPointerLeaveBound = null;
       }
       if (this.$frames && this.$frames.length) {
-        gsap.killTweensOf(this.$frames);
+        gsap.killTweensOf(this.$frames, MOUSE_PROPS);
         gsap.set(this.$frames, { x: 0, y: 0, rotateX: 0, rotateY: 0 });
       }
       if (this.$narratives && this.$narratives.length) {
-        gsap.killTweensOf(this.$narratives);
+        gsap.killTweensOf(this.$narratives, MOUSE_PROPS);
         gsap.set(this.$narratives, { x: 0, y: 0 });
       }
       if (this.$bubbleInners && this.$bubbleInners.length) {
-        gsap.killTweensOf(this.$bubbleInners);
+        gsap.killTweensOf(this.$bubbleInners, MOUSE_PROPS);
         gsap.set(this.$bubbleInners, { x: 0, y: 0 });
       }
       if (this.$layerMouses && this.$layerMouses.length) {
-        gsap.killTweensOf(this.$layerMouses);
+        gsap.killTweensOf(this.$layerMouses, MOUSE_PROPS);
         gsap.set(this.$layerMouses, { x: 0, y: 0, rotate: 0 });
       }
       if (this.$chapterCaptions && this.$chapterCaptions.length) {
-        gsap.killTweensOf(this.$chapterCaptions);
+        gsap.killTweensOf(this.$chapterCaptions, MOUSE_PROPS);
         gsap.set(this.$chapterCaptions, { x: 0, y: 0 });
       }
       if (this.$anchorTexts && this.$anchorTexts.length) {
-        gsap.killTweensOf(this.$anchorTexts);
+        gsap.killTweensOf(this.$anchorTexts, MOUSE_PROPS);
         gsap.set(this.$anchorTexts, { x: 0, y: 0 });
       }
     },
@@ -908,7 +985,7 @@ define([
       // so the text moves with the wave it sits on.
       if (this.$anchorTexts && this.$anchorTexts.length) {
         this.$anchorTexts.each(function (i, el) {
-          var depth = Number($(el).closest('.caption-anchor').attr('data-depth')) || 0.5;
+          var depth = Number($(el).closest('.caption-anchor').attr('data-depth')) || NARRATION_DEPTH;
           gsap.to(el, {
             x: normX * (depth - MOUSE_REF) * MOUSE_X,
             y: normY * (depth - MOUSE_REF) * MOUSE_Y,
