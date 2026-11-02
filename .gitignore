@@ -1,0 +1,25 @@
+# Antigravity / AI Agent
+.agents/
+
+# Tools & internal scripts
+tools/
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs & temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node modules & editor settings
+node_modules/
+.vscode/
+.idea/

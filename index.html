@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Malin Kundang — Webcomic</title>
+  <meta name="description" content="A scroll-driven retelling of Malin Kundang, the West Sumatran legend of the son who forgot his mother.">
+  <meta name="theme-color" content="#4b6381">
+
+  <!-- Open Graph / Twitter Card. Replace example.com with your deployed absolute URL. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Malin Kundang Comic">
+  <meta property="og:title" content="Malin Kundang — a scroll-driven graphic story">
+  <meta property="og:description" content="Scroll through the West Sumatran legend of the son who forgot his mother.">
+  <meta property="og:url" content="https://example.com/malin-kundang-comic/">
+  <meta property="og:image" content="https://example.com/malin-kundang-comic/img/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="A ship caught in a storm at night off the Sumatran coast.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Malin Kundang — a scroll-driven graphic story">
+  <meta name="twitter:description" content="Scroll through the West Sumatran legend of the son who forgot his mother.">
+  <meta name="twitter:image" content="https://example.com/malin-kundang-comic/img/og-image.png">
+
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Lato:wght@400&family=Caveat:wght@600;700&family=Permanent+Marker&family=Special+Elite&display=swap">
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div id="app-container" tabindex="-1"></div>
+  <div id="title-container"></div>
+  <div id="chapter-nav-container"></div>
+  <div id="preloader-container"></div>
+
+  <noscript>
+    <div class="flight-warning">
+      <h1>JavaScript required</h1>
+      <p>This story is an interactive scroll experience and needs JavaScript enabled.</p>
+    </div>
+  </noscript>
+
+  <!-- Feature/device detection: must run before flightcheck.js (no AMD, plain globals). -->
+  <script src="scripts/vendor/modernizr-custom.js"></script>
+  <script src="scripts/vendor/detectizr.min.js"></script>
+  <!-- Story data: allows running directly via file:// on double click without HTTP server -->
+  <script src="scripts/data/story-data.js"></script>
+  <!-- Sanity checks + window.FLIGHT. Shows "unsupported browser" message on failure. -->
+  <script src="scripts/flightcheck.js"></script>
+  <!-- RequireJS: single data-main entry. -->
+  <script data-main="scripts/main" src="scripts/vendor/require.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,1011 @@
+/*
+ * main.css — layout + UI for the scroll story.
+ * Sections: tokens, base, scenes, captions, fx, intro, title, chapter nav,
+ * flight warning, reduced motion.
+ */
+
+/* ---------- Tokens ---------- */
+:root {
+  --ink: #0d0f14;
+  /* Sampled from img/scenes/segment-one/1.PNG (flat base colour of the art). */
+  --page-bg: #4b6381;
+  --ink-2: #1b1f2a;
+  --paper: #f4ecd8;
+  --accent: #e8a33d;
+  --muted: #9aa0ad;
+  --ui-bg: rgba(13, 15, 20, 0.72);
+  --font-display: "Permanent Marker", "Brush Script MT", Impact, sans-serif;
+  --font-type: "Special Elite", "Courier New", monospace;
+  --font-hand: "Caveat", "Comic Neue", "Comic Sans MS", cursive, sans-serif;
+  --font-caption: "Comic Neue", "Trebuchet MS", system-ui, sans-serif;
+  --font-story: "Lato", "Helvetica Neue", Arial, sans-serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* 100svh with a 100vh fallback for browsers without small-viewport units. */
+  --stage-h: 100vh;
+  --gutter: 16px;
+  --nav-w: 52px; /* right chapter strip */
+}
+
+@supports (height: 100svh) {
+  :root { --stage-h: 100svh; }
+}
+
+/* ---------- Base ---------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  -webkit-text-size-adjust: 100%;
+}
+
+html.is-locked,
+html.is-locked body { overflow: hidden; }
+
+#app-container:focus { outline: none; }
+
+[hidden] { display: none !important; }
+
+.btn {
+  font: 600 0.9rem/1 var(--font-ui);
+  letter-spacing: 0.02em;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  cursor: pointer;
+  color: var(--paper);
+  background: transparent;
+  transition: background-color 0.2s, color 0.2s, opacity 0.2s;
+}
+
+.btn:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.btn--primary:hover:not(:disabled) { background: var(--paper); border-color: var(--paper); }
+
+.btn--ghost { background: var(--ui-bg); }
+.btn--ghost:hover { background: var(--paper); color: var(--ink); }
+.btn--ghost[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--ink); }
+
+.btn:disabled { opacity: 0.4; cursor: default; }
+
+.ui-hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* ---------- Scenes ---------- */
+.scene {
+  position: relative;
+  /* --scene-extra: camera.pace scroll for wide screens (sceneView.sizeScene). */
+  height: calc(var(--scene-h, 3) * var(--stage-h) + var(--scene-extra, 0px));
+}
+
+.scene__stage {
+  position: sticky;
+  top: 0;
+  height: var(--stage-h);
+  overflow: hidden;
+  background: var(--scene-bg, var(--page-bg));
+}
+
+.scene__fx,
+.scene__captions {
+  position: absolute;
+  inset: 0;
+}
+/* Narration sits in front of every layer and the fx overlay. */
+.scene__captions { z-index: 3; }
+.scene__fx { z-index: 2; }
+
+/*
+ * Art box: every layer shares the art's aspect ratio (--art-ratio = width / height,
+ * set per scene) and the box covers the stage. Phone-shaped screens see the whole
+ * composition; wider screens fill the width and the camera pans down (sceneView).
+ */
+.scene__art {
+  --art-w: max(100%, calc(var(--stage-h) * var(--art-ratio, 1.6)));
+  position: absolute;
+  top: 0;
+  left: calc(50% - var(--art-w) / 2);
+  width: var(--art-w);
+  /* Not calc(var(--art-w) / ratio): the 100% inside --art-w would resolve against height. */
+  aspect-ratio: var(--art-ratio, 1.6);
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.scene.is-loaded .layer { opacity: 1; }
+
+.layer__mouse {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.layer__shake {
+  position: absolute;
+  inset: 0;
+}
+
+.layer__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.scene.is-active .layer__img,
+.scene.is-active .layer__shake { will-change: transform; }
+
+/* ---------- Captions ---------- */
+.scene__captions { pointer-events: none; }
+
+.caption-group {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: min(28rem, calc(100% - 2 * var(--gutter)));
+}
+
+.caption-group--top-left { top: 10%; left: max(var(--gutter), 6%); align-items: flex-start; }
+.caption-group--top-right { top: 10%; right: max(var(--gutter), 6%); align-items: flex-end; }
+.caption-group--bottom-left { bottom: 12%; left: max(var(--gutter), 6%); align-items: flex-start; }
+.caption-group--bottom-right { bottom: 12%; right: max(var(--gutter), 6%); align-items: flex-end; }
+.caption-group--top-center,
+.caption-group--bottom-center,
+.caption-group--center {
+  left: 0;
+  right: 0;
+  max-width: none;
+  padding: 0 calc(var(--nav-w) + 8px);
+  align-items: center;
+  text-align: center;
+}
+.caption-group--top-center { top: 10%; }
+.caption-group--bottom-center { bottom: 16%; }
+.caption-group--center { top: 0; bottom: 0; justify-content: center; }
+/* anchor.lock: top set in px by sceneView; group centred on that line. */
+.caption-group--locked {
+  left: 0;
+  right: 0;
+  max-width: none;
+  padding: 0 calc(var(--nav-w) + 8px);
+  align-items: center;
+  text-align: center;
+  transform: translateY(-50%);
+}
+
+/* Art-anchored captions (caption.anchor): a box covering the art, moved like a layer
+ * (sceneView), so a layer's shake (% of the art box, art pivot) applies to it unchanged.
+ * The group's bottom edge sits at anchor.y (inline style), centred on screen
+ * (art box is centred on the stage, so 50% of the art = screen centre). */
+.caption-anchor {
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* in front of the layers inside the art box */
+  pointer-events: none;
+}
+.caption-group--anchor {
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(48rem, calc(100vw - 2 * (var(--nav-w) + 8px)));
+  max-width: none;
+  align-items: center;
+  text-align: center;
+}
+
+/* Visible by default (comic text); captions with fade: true start hidden via GSAP. */
+.caption {
+  margin: 0;
+  max-width: min(28rem, 100%);
+}
+
+/* "panel": comic caption box. */
+.scene__captions--panel .caption {
+  padding: 0.9rem 1.1rem;
+  background: var(--paper);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.55);
+  font: 700 clamp(1rem, 2.3vw, 1.3rem)/1.4 var(--font-caption);
+}
+
+/* "plain": small white narration set straight on the art. */
+.scene__captions--plain .caption-group { gap: 1.4em; }
+
+.scene__captions--plain .caption {
+  max-width: 48rem;
+  color: #fff;
+  font: 400 clamp(0.8rem, 0.6rem + 0.6vw, 1.1rem)/1.5 var(--font-story);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+/* Chapter title card on scene (e.g. Chapter 1: Rumah) */
+.caption--chapter-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.35rem;
+  max-width: none !important;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  will-change: transform;
+}
+
+.scene__captions--plain .caption--chapter-title {
+  max-width: none !important;
+  text-shadow: none;
+}
+
+.chapter-title__label {
+  display: block;
+  font-family: var(--font-story);
+  font-size: clamp(0.72rem, 0.62rem + 0.35vw, 1.05rem);
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.75), 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.chapter-title__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 1.5rem + 3.2vw, 4.8rem);
+  line-height: 0.95;
+  font-weight: 400;
+  color: #ffffff;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 3px 18px rgba(0, 0, 0, 0.9), 0 1px 5px rgba(0, 0, 0, 0.95);
+}
+
+/* ---------- FX overlay ---------- */
+.scene__fx {
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.scene__fx.is-running { opacity: 1; }
+
+.fx-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- Comic panels & white transition ---------- */
+.scene__white-transition {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scene__panels {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.comic-panel {
+  position: absolute;
+  inset: 0;
+  visibility: hidden; /* GSAP autoAlpha shows it */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem calc(var(--nav-w) + 20px) 1.5rem 20px;
+  will-change: transform, opacity;
+  pointer-events: none;
+  perspective: 1200px;
+  opacity: 0;
+}
+
+.comic-panel__tilt {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.comic-panel--with-narrative .comic-panel__tilt {
+  max-height: 50vh;
+}
+
+.comic-panel--tilt-3d {
+  perspective: 1200px;
+}
+
+.comic-panel__tilt--active {
+  transform: rotateY(14deg);
+}
+
+.comic-panel__frame {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: min(100%, 1100px);
+  max-height: 85vh;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.comic-panel__img {
+  max-width: 100%;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.comic-bubble {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  will-change: opacity;
+  opacity: 0;
+  transform-style: preserve-3d;
+  z-index: 5;
+  container-type: inline-size;
+}
+
+.comic-bubble__inner {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: translateZ(45px);
+  will-change: transform;
+}
+
+.comic-bubble__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.comic-bubble__dialog {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+  padding: 0; /* text is sized to the oval by sceneView.fitBubbleText */
+  border-radius: 50%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 10;
+  container-type: size;
+}
+
+/* Shrink-wraps its lines so sceneView.fitBubbleText can measure the block;
+ * font-size below is only the pre-fit fallback. */
+.comic-bubble__text {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+  width: auto;
+  max-width: none;
+  color: #11141a;
+  font-family: "Comic Neue", "Comic Sans MS", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 700;
+  font-size: clamp(10px, min(9.8cqw, 11cqh), 22px);
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
+  word-break: normal;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.bubble-line {
+  display: block;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.bubble-word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(3px);
+  will-change: opacity, transform;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+
+  .comic-panel--narrative {
+    padding: 0 calc(var(--nav-w) + 24px);
+}
+
+.comic-panel--with-narrative {
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.comic-panel--with-narrative .comic-panel__frame {
+  max-height: 50vh;
+}
+
+.comic-panel--with-narrative .comic-panel__img {
+  max-height: 50vh;
+}
+
+.comic-panel--with-narrative .comic-panel__narrative {
+  padding: 0;
+}
+
+/* Multi-panel composite scene */
+.comic-panel--multi {
+  padding: 1rem calc(var(--nav-w) + 16px) 1rem 16px;
+}
+
+.comic-multi-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1060px;
+  max-height: 88vh;
+  position: relative;
+  align-items: stretch;
+}
+
+/* Stagger-right multi layout (Segment 1 Panels 4 & 5) */
+.comic-multi-container--stagger-right {
+  align-items: stretch;
+}
+
+.comic-multi-container--stagger-right .comic-multi__tilt--0 {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.comic-multi-container--stagger-right .comic-multi__tilt--1 {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.comic-multi__frame--0 {
+  align-self: flex-start;
+  max-width: 82%;
+  max-height: 50vh;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.comic-multi__frame--0 .comic-panel__img {
+  max-height: 50vh;
+}
+
+.comic-multi__frame--1 {
+  align-self: flex-end;
+  max-width: 44%;
+  max-height: 44vh;
+  margin-top: -3.5vh;
+  margin-left: auto;
+  margin-right: 2%;
+  z-index: 2;
+}
+
+.comic-multi__frame--1 .comic-panel__img {
+  max-height: 44vh;
+}
+
+/* Diptych 3D composite scene (Panel 13 & 14) */
+.comic-panel--diptych-3d {
+  padding: 1rem calc(var(--nav-w) + 20px) 1rem 20px;
+}
+
+.comic-multi-container--diptych-3d {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1020px;
+  max-height: 88vh;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.2rem, 3vh, 2.5rem);
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.comic-multi__tilt {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+  width: 100%;
+}
+
+.comic-multi__tilt--right-away {
+  transform: rotateY(13deg);
+}
+
+.comic-multi__tilt--left-away {
+  transform: rotateY(-13deg);
+}
+
+.comic-multi-container--diptych-3d .comic-multi__frame {
+  max-width: 100%;
+  max-height: 38vh;
+  width: auto;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.comic-multi-container--diptych-3d .comic-panel__img {
+  max-height: 38vh;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+}
+
+.comic-panel--narrative {
+  padding: 0 calc(var(--nav-w) + 20px) 0 20px;
+}
+
+.comic-narrative {
+  width: 80vw;
+  max-width: min(80vw, 1200px);
+  margin: 0 auto;
+  text-align: center;
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.comic-panel--narrative .comic-narrative {
+  width: 80vw;
+  max-width: min(80vw, 1200px);
+}
+
+.comic-panel--with-narrative .comic-panel__narrative {
+  padding: 0;
+  width: 80vw;
+  max-width: min(80vw, 1200px);
+}
+
+.comic-narrative__text {
+  width: 100%;
+  margin: 0 auto;
+  color: #242933;
+  font-family: var(--font-story);
+  font-size: clamp(16px, 14px + 0.35vw, 20px);
+  font-weight: 400;
+  line-height: 1.85;
+  letter-spacing: 0.025em;
+  text-align: center;
+  text-wrap: balance;
+  position: relative;
+}
+
+/* ---------- Intro (typewriter loader) ---------- */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+  background: radial-gradient(ellipse at 50% 45%, #1c2230 0%, var(--ink) 75%);
+}
+
+.intro__type {
+  margin: 0;
+  color: var(--paper);
+  font: 400 clamp(1.1rem, 0.8rem + 1.4vw, 1.8rem)/1.2 var(--font-type);
+  letter-spacing: 0.06em;
+  white-space: pre;
+}
+
+.intro__caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  margin-left: 0.1em;
+  vertical-align: -0.12em;
+  background: currentColor;
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+.intro.is-ready .intro__type { animation: start-pulse 2.4s ease-in-out infinite; }
+.intro.is-leaving .intro__caret { visibility: hidden; }
+
+@keyframes caret-blink { 50% { opacity: 0; } }
+@keyframes start-pulse { 50% { opacity: 0.55; } }
+
+/* Invisible full-screen hit area: click / tap / Enter anywhere starts. */
+.intro__start {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.intro__start:disabled { cursor: progress; }
+/* Auto-focused when ready so Enter starts; the pulsing "Click to start" is the cue, no frame. */
+.intro__start:focus,
+.intro__start:focus-visible { outline: none; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Title + thunder ---------- */
+.title-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.thunder {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 20%, #f2f5ff 0%, #c9d4ec 60%, #a9b7d6 100%);
+  mix-blend-mode: screen;
+  opacity: 0;
+}
+
+.title-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(var(--nav-w) + 8px);
+  text-align: center;
+}
+
+.story-title {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: clamp(3.8rem, 2rem + 8.5vw, 9.5rem);
+  font-weight: 400;
+  line-height: 0.88;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: 0 4px 25px rgba(10, 15, 30, 0.85), 0 2px 8px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.story-title__line {
+  display: block;
+  text-align: center;
+}
+
+.story-title__line--1 {
+  letter-spacing: 0.07em;
+}
+
+.story-title__line--2 {
+  letter-spacing: 0.03em;
+}
+
+/* ---------- Chapter nav + controls ---------- */
+#chapter-nav-container { transition: opacity 0.4s, visibility 0.4s; }
+
+/* Black brush strip on the right edge, hand-lettered chapter numbers. */
+.chapter-nav {
+  position: fixed;
+  right: 0;
+  top: 9%;
+  bottom: 7%;
+  z-index: 50;
+  width: var(--nav-w);
+}
+
+.chapter-nav__stroke {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: #050506;
+  filter: drop-shadow(-2px 0 6px rgba(0, 0, 0, 0.35));
+}
+
+.chapter-nav__halo { opacity: 0.55; }
+
+.chapter-nav__list {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: clamp(2.5rem, 9vh, 5rem) 0 0 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(2.2rem, 7.5vh, 4.5rem);
+}
+
+.chapter-num {
+  position: relative;
+  display: block;
+  padding: 0.2rem 0.6rem;
+  border: 0;
+  background: none;
+  color: #7d7f84;
+  font: 400 1.45rem/1 var(--font-hand);
+  cursor: pointer;
+  transition: color 0.25s, transform 0.25s;
+}
+
+/* Bigger hit area for touch. */
+.chapter-num::before {
+  content: "";
+  position: absolute;
+  inset: -10px -8px;
+}
+
+.chapter-num:hover { color: #c9cbd0; }
+
+.chapter-num.is-current {
+  color: #fff;
+  transform: scale(1.12);
+}
+
+.chapter-num:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.chapter-num__label {
+  position: absolute;
+  right: calc(100% + 18px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  padding: 0.35rem 0.7rem;
+  background: #050506;
+  color: #fff;
+  font: 600 1.15rem/1 var(--font-hand);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.chapter-num:hover .chapter-num__label,
+.chapter-num:focus-visible .chapter-num__label { opacity: 1; }
+
+@media (max-width: 600px) {
+  :root { --nav-w: 44px; }
+  .chapter-num { font-size: 1.45rem; }
+  .comic-panel {
+    padding: 1rem calc(var(--nav-w) + 6px) 1rem 8px;
+  }
+  .comic-panel__frame {
+    max-width: 100%;
+    max-height: 78vh;
+  }
+  .comic-panel__img {
+    max-width: 100%;
+    max-height: 78vh;
+  }
+  .comic-bubble {
+    max-width: 100%;
+    max-height: 78vh;
+  }
+  .comic-panel--narrative {
+    padding: 0 calc(var(--nav-w) + 10px) 0 10px;
+  }
+  .comic-panel--with-narrative {
+    gap: 0.85rem;
+    padding: 1rem calc(var(--nav-w) + 8px) 1rem 8px;
+  }
+  .comic-panel--with-narrative .comic-panel__tilt {
+    max-height: 42vh;
+  }
+  .comic-panel--with-narrative .comic-panel__frame {
+    max-height: 42vh;
+  }
+  .comic-panel--with-narrative .comic-panel__img {
+    max-height: 42vh;
+  }
+  .comic-panel--with-narrative .comic-narrative__text {
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 22rem;
+  }
+  .comic-panel--multi {
+    padding: 0.75rem calc(var(--nav-w) + 6px) 0.75rem 6px;
+  }
+  .comic-multi-container {
+    max-width: 100%;
+    max-height: 86vh;
+    align-items: stretch;
+  }
+  .comic-multi-container--stagger-right .comic-multi__tilt--0 {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .comic-multi-container--stagger-right .comic-multi__tilt--1 {
+    justify-content: flex-end;
+    width: 100%;
+  }
+  .comic-multi__frame--0 {
+    max-width: 84%;
+    max-height: 46vh;
+    margin-left: 0;
+    margin-right: auto;
+  }
+  .comic-multi__frame--0 .comic-panel__img {
+    max-height: 46vh;
+  }
+  .comic-multi__frame--1 {
+    max-width: 52%;
+    max-height: 38vh;
+    margin-top: -3.5vh;
+    margin-left: auto;
+    margin-right: 1%;
+  }
+  .comic-multi__frame--1 .comic-panel__img {
+    max-height: 38vh;
+  }
+  .comic-panel--diptych-3d {
+    padding: 0.75rem calc(var(--nav-w) + 6px) 0.75rem 6px;
+  }
+  .comic-multi-container--diptych-3d {
+    max-width: 100%;
+    max-height: 85vh;
+    gap: 0.85rem;
+  }
+  .comic-multi-container--diptych-3d .comic-multi__frame {
+    max-height: 35vh;
+  }
+  .comic-multi-container--diptych-3d .comic-panel__img {
+    max-height: 35vh;
+  }
+  .comic-panel--narrative {
+    padding: 0 calc(var(--nav-w) + 8px) 0 8px;
+  }
+  .comic-narrative,
+  .comic-panel--narrative .comic-narrative,
+  .comic-panel--with-narrative .comic-panel__narrative {
+    width: 85vw;
+    max-width: 85vw;
+    padding: 0.5rem 0.25rem;
+  }
+  .comic-narrative__text {
+    font-size: 14px;
+    line-height: 1.65;
+    max-width: none;
+    width: 100%;
+  }
+}
+
+.controls {
+  position: fixed;
+  left: var(--gutter);
+  bottom: calc(var(--gutter) + env(safe-area-inset-bottom, 0px));
+  z-index: 50;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Flight warning (unsupported / load failure) ---------- */
+.flight-warning {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--gutter);
+  text-align: center;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-ui);
+}
+
+.flight-warning h1 { margin: 0 0 1rem; font-size: 1.6rem; color: #e8a33d; }
+.flight-warning p { max-width: 32rem; line-height: 1.5; margin: 0; }
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .layer,
+  .scene.is-active .layer__img,
+  .scene.is-active .layer__shake { will-change: auto; }
+
+  .comic-bubble__inner {
+    transform: none !important;
+  }
+
+  .bubble-word {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}

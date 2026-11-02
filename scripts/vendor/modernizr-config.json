@@ -1,0 +1,9 @@
+{
+  "minify": true,
+  "options": ["setClasses", "addTest", "mq", "testProp", "prefixed"],
+  "feature-detects": [
+    "test/canvas", "test/webgl", "test/audio/webaudio", "test/touchevents",
+    "test/css/transforms3d", "test/css/animations", "test/video", "test/audio",
+    "test/storage/localstorage", "test/history"
+  ]
+}
