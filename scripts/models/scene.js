@@ -7,8 +7,17 @@
  * Fields:
  *   id, chapter, height (in screens),
  *   art          { width, height }  canvas size every layer was exported at (px)
- *   camera       { end 0..1, lift, liftFrom, pace }
- *                pace: extra scroll (px) added to the section per px the camera travels.
+ *   camera       { end 0..1, lift, liftFrom, pace, startCenter?, holdStart?, holdEnd?, spread? }
+ *                spread: scales how far layers start from their place (depth push). < 1 = the
+ *                waves start closer under the boat and arrive sooner (default 1).
+ *                holdStart / holdEnd: screens of scroll where the art stays still before the
+ *                camera moves (e.g. on the boat) and after it arrives (on the waves). Added on
+ *                top of the move's own scroll length.
+ *                startCenter: art fraction centred on screen when the scene starts (e.g. the
+ *                boat), instead of the art top. Only matters where the art is taller than
+ *                the screen (desktop); scroll length and timings are unchanged.
+ *                pace: extra scroll (px) added to the section per px the camera travels
+ *                (from its start frame to its end frame).
  *                Wide screens pan far (desktop ≈ 2 screens), phones barely pan, so without
  *                it desktop motion is several times faster per scroll. 0 = off.
  *                end: art fraction shown at the top of the screen when the scene
@@ -22,14 +31,20 @@
  *            a "smile" path (up-left -> down-centre -> up-right), tilting into the
  *            swing. x/y are % of the art box, so give the layer enough scale overscan.
  *            back-to-front
- *   captions [{ at 0..1, dur 0..1, pos, text, anchor?, exit?, fade? }]
+ *   captions [{ at 0..1, dur 0..1, phase?, pos, text, anchor?, exit?, fade? }]
+ *            phase "start" | "move" | "end": at/dur are fractions of that part of the wave
+ *            scroll (camera.holdStart, the camera move, camera.holdEnd), so a caption lands in
+ *            the same part on every screen. Default "all": fractions of the whole wave scroll.
  *            Default: always visible, in front of the layers, no fading (comic text).
  *            fade true (opt-in): fade in at `at`; with exit "fade" also fade out at at + dur.
  *            Without fade, at/dur are ignored (except exit "scroll", which starts at `at`).
- *            exit "fade" (default): fades out at at + dur (only with fade: true).
- *            exit "scroll": no fade-out; from `at` the caption moves up 1:1 with the
- *            page scroll (like text printed on the page) until it leaves the top.
- *            dur is ignored. Scroll captions sharing a group hold in place until
+ *            enter "scroll": slides up from below the screen to its spot, 1:1 with the
+ *            page, over one screen of scroll from `at` (default: appears in place).
+ *            cueTransition 0..1 (true = 0.4): the white transition to the panels starts that far
+ *            through this caption's scroll-out, so the white covers the text as it leaves,
+ *            instead of starting at the end of the wave part.
+ *            exit "scroll": from at + dur slides up off the top, 1:1 with the page, over
+ *            one screen of scroll (default: disappears in place; fades with fade: true). Scroll captions sharing a group hold in place until
  *            the group's latest `at`, then move together (every line appears at
  *            the anchor, no gap between them).
  *            anchor { y 0..1, depth 0..1 }: pin the caption to the art instead of
@@ -64,7 +79,7 @@ define(['underscore', 'backbone'], function (_, Backbone) {
       srcMobile: layer.srcMobile ? String(layer.srcMobile) : null,
       alt: layer.alt ? String(layer.alt) : '',
       depth: clamp(layer.depth, 0, 1, 0.5),
-      scale: clamp(layer.scale, 1, 2, 1),
+      scale: clamp(layer.scale, 0.5, 2, 1), // < 1 shrinks the layer around its pivot (e.g. the boat)
       pivot: PIVOT_RE.test(layer.pivot) ? layer.pivot : '50% 50%',
       drift: clamp(layer.drift, 0, 20, 0),
       bob: clamp(layer.bob, 0, 60, 0),
@@ -87,11 +102,20 @@ define(['underscore', 'backbone'], function (_, Backbone) {
       label: caption.label ? String(caption.label) : '',
       title: caption.title ? String(caption.title) : '',
       at: clamp(caption.at, 0, 1, 0),
-      dur: clamp(caption.dur, 0.02, 1, 0.2),
+      dur: clamp(caption.dur, 0.02, 10, 0.2), // may run past its phase: a window reaching the end stays
       pos: _.contains(POSITIONS, caption.pos) ? caption.pos : 'bottom-left',
       text: String(caption.text || ''),
       exit: caption.exit === 'scroll' ? 'scroll' : 'fade',
+      enter: caption.enter === 'scroll' ? 'scroll' : 'none',
+      // Screens of scroll the enter / exit slide takes (1 = moves with the page 1:1;
+      // 2 = half as fast, lasts twice as long; 0.5 = twice as fast).
+      enterDur: clamp(caption.enterDur, 0.1, 5, 1),
+      exitDur: clamp(caption.exitDur, 0.1, 5, 1),
+      // false, or 0..1 = how far through its scroll-out the white transition starts (true = 0.4).
+      cueTransition: caption.cueTransition === true ? 0.4
+        : (_.isNumber(caption.cueTransition) ? clamp(caption.cueTransition, 0, 1, 0.4) : false),
       fade: caption.fade === true,
+      phase: _.contains(['start', 'move', 'end'], caption.phase) ? caption.phase : 'all',
       anchor: a ? {
         y: clamp(a.y, 0, 1, 0.5),
         depth: layer !== null ? layers[layer].depth : clamp(a.depth, 0, 1, 0.5),
@@ -196,7 +220,11 @@ define(['underscore', 'backbone'], function (_, Backbone) {
           end: clamp(attrs.camera && attrs.camera.end, 0, 1, 1),
           lift: clamp(attrs.camera && attrs.camera.lift, 0, 1, 0),
           liftFrom: clamp(attrs.camera && attrs.camera.liftFrom, 0, 0.99, 0.5),
-          pace: clamp(attrs.camera && attrs.camera.pace, 0, 10, 0)
+          pace: clamp(attrs.camera && attrs.camera.pace, 0, 10, 0),
+          startCenter: clamp(attrs.camera && attrs.camera.startCenter, 0, 1, 0),
+          holdStart: clamp(attrs.camera && attrs.camera.holdStart, 0, 10, 0),
+          holdEnd: clamp(attrs.camera && attrs.camera.holdEnd, 0, 10, 0),
+          spread: clamp(attrs.camera && attrs.camera.spread, 0, 2, 1)
         },
         background: attrs.background ? String(attrs.background) : '',
         captionStyle: _.contains(CAPTION_STYLES, attrs.captionStyle) ? attrs.captionStyle : 'panel',

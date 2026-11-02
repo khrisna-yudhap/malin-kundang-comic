@@ -12,16 +12,20 @@ window.STORY_DATA = {
     {
       "id": "segment-one",
       "chapter": "rumah",
-      "height": 4,
+      "height": 3,
       "art": {
         "width": 1920,
         "height": 3198
       },
       "camera": {
-        "end": 1,
+        "end": 0.55,
         "lift": 0.2,
         "liftFrom": 0.6,
-        "pace": 3
+        "pace": 1,
+        "startCenter": 0.6,
+        "holdStart": 2,
+        "holdEnd": 0.5,
+        "spread": 0.7
       },
       "background": "#4b6381",
       "captionStyle": "plain",
@@ -59,7 +63,8 @@ window.STORY_DATA = {
             "rot": 0.7,
             "period": 3.6,
             "phase": 0
-          }
+          },
+          "scale": 0.92
         },
         {
           "src": "img/scenes/segment-one/5.PNG",
@@ -132,30 +137,32 @@ window.STORY_DATA = {
           "type": "chapter-title",
           "label": "CHAPTER 1 :",
           "title": "RUMAH",
-          "at": 0.22,
-          "dur": 0.48,
-          "anchor": {
-            "y": 0.44,
-            "depth": 0.6
-          }
+          "at": 0.25,
+          "dur": 0.75,
+          "pos": "center",
+          "phase": "start",
+          "enter": "scroll",
+          "exit": "scroll"
         },
         {
-          "at": 0.84,
-          "dur": 0.16,
+          "at": 0.1,
+          "dur": 0.02,
           "text": "Di tepi Sumatera, ada sebuah kampung kecil yang tidak pernah sunyi dari suara ombak.",
-          "anchor": {
-            "y": 0.8,
-            "depth": 0.8
-          }
+          "phase": "move",
+          "enter": "scroll",
+          "pos": "bottom-center",
+          "exit": "scroll",
+          "cueTransition": true
         },
         {
-          "at": 0.92,
-          "dur": 0.08,
+          "at": 0.15,
+          "dur": 0.025,
           "text": "Tempat di mana ombak laut datang sebelum matahari.",
-          "anchor": {
-            "y": 0.8,
-            "depth": 0.8
-          }
+          "phase": "move",
+          "enter": "scroll",
+          "pos": "bottom-center",
+          "exit": "scroll",
+          "cueTransition": true
         }
       ],
       "audio": null,

@@ -124,3 +124,14 @@ Proyek ini siap diunggah langsung ke layanan static web hosting tanpa perlu pros
 - **Netlify:** Drag & drop seluruh folder proyek ke dashboard Netlify, atau gunakan perintah `netlify deploy --prod`.
 - **Cloudflare Pages:** Unggah langsung folder proyek melalui dashboard Cloudflare Pages.
 - **GitHub Pages:** Push repositori ke GitHub → Masuk ke **Settings** → **Pages** → Pilih branch utama dan folder `/ (root)`.
+
+### Caption timing cheat sheet
+
+| Field | Meaning |
+|---|---|
+| `phase` | `"start"` (boat pause), `"move"` (camera move), `"end"` (wave pause) or `"all"`: which part `at`/`dur` refer to |
+| `at` | when it starts, as a fraction of that part (0 = start, 1 = end) |
+| `enter: "scroll"` + `enterDur` | slides up from below; `enterDur` = screens of scroll it takes (default 1 = moves with the page) |
+| `dur` | how long it stays still after entering (fraction of the part; tiny = no stop) |
+| `exit: "scroll"` + `exitDur` | slides up off the top; `exitDur` = screens of scroll it takes (default 1) |
+| `cueTransition` | `true`/0..1: the white transition starts that far through this caption's exit |

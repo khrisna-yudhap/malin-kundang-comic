@@ -4,9 +4,9 @@
  * Responsibility: after "story:begin", show the story title centred on the
  * first screen: a lightning flash, and the title settles from large to its
  * size. Then a thunder strike (screen flash) repeats at random intervals while
- * the title is on screen. The title stays locked in position until the steamship
- * enters the stage, then scrolls up 1:1 with the page (no fade) until it leaves
- * the top; strikes pause while it is off screen.
+ * the title is on screen. The title stays in place on the still boat frame, then
+ * slides up off the top 1:1 with the page (no fade) from TITLE_EXIT_AT screens;
+ * strikes pause while it is off screen.
  *
  * Mouse parallax (fine pointer, no reduced motion): the title drifts with the pointer
  * like the front-most layer.
@@ -21,6 +21,10 @@ define(['jquery', 'underscore', 'backbone', 'services/anim'], function ($, _, Ba
   var gsap = anim.gsap;
   var STRIKE_MIN = 4;    // s between strikes
   var STRIKE_MAX = 9;
+  // The title slides up off the screen 1:1 with the page, starting TITLE_EXIT_AT
+  // screens into the scroll. The chapter caption (enter "scroll") starts at the same
+  // scroll, so it rises in from below as the title leaves, one screen behind it.
+  var TITLE_EXIT_AT = 0.5;
   var MOUSE_X = 30;      // px at full pointer offset (front-most layer feel)
   var MOUSE_Y = 16;
 
@@ -101,42 +105,16 @@ define(['jquery', 'underscore', 'backbone', 'services/anim'], function ($, _, Ba
       }, this));
     },
 
-    // Scroll Y where the steamship enters the stage from below.
-    shipEntryScroll: function () {
-      var scene = document.querySelector('#scene-segment-one') || document.querySelector('.scene');
-      if (!scene) { return window.innerHeight; }
-      var stage = scene.querySelector('.scene__stage');
-      var art = scene.querySelector('.scene__art');
-      var stageH = stage ? stage.clientHeight : window.innerHeight;
-      var artH = art ? art.offsetHeight : stageH;
-
-      // Camera travel and start offset for ship (depth 0.6)
-      var maxTravel = Math.max(0, artH - stageH);
-      var cameraEnd = Math.min(maxTravel, artH);
-      // Wave scroll distance of the wave part (height 4 screens = 3 screens scroll + cameraEnd * pace 3)
-      var waveScroll = Math.max(0, 3 * stageH + cameraEnd * 3);
-      if (waveScroll <= 0) { return stageH; }
-
-      var startY = 0.2 * stageH;
-      // Ship's masts appear at art fraction ~0.46
-      var shipArtY = 0.46 * artH;
-      var denom = startY + cameraEnd;
-      var p = denom > 0 ? (shipArtY + startY - stageH) / denom : 0.22;
-      // Clamp between 0.18 and 0.30
-      p = Math.max(0.18, Math.min(0.30, p));
-      return Math.round(p * waveScroll);
-    },
-
-    // Title stays locked in place until the ship appears, then travels up with
-    // the page like printed text: one screen of scroll = one screen up.
+    // Title stays in place on the still boat frame, then slides up off the screen
+    // (no fade) partway through the start hold, before the chapter title shows.
     bindScrollFade: function () {
       var self = this;
       this.fade = gsap.fromTo(this.cardEl, { y: 0 }, {
         y: function () { return -window.innerHeight; },
         ease: 'none',
         scrollTrigger: {
-          start: function () { return self.shipEntryScroll(); },
-          end: function () { return self.shipEntryScroll() + window.innerHeight; },
+          start: function () { return TITLE_EXIT_AT * window.innerHeight; },
+          end: function () { return (TITLE_EXIT_AT + 1) * window.innerHeight; },
           scrub: true,
           invalidateOnRefresh: true,
           onLeave: _.bind(function () { this.visible = false; }, this),

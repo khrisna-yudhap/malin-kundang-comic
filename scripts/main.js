@@ -26,7 +26,8 @@
     backbone: 'https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.5.0/backbone-min',
     gsap: 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min',
     ScrollTrigger: 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min',
-    three: 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min'
+    three: 'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min',
+    lenis: 'https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min'
   };
 
   var LOCAL = {
@@ -35,7 +36,8 @@
     backbone: 'vendor/backbone-min',
     gsap: 'vendor/gsap.min',
     ScrollTrigger: 'vendor/ScrollTrigger.min',
-    three: 'vendor/three.min'
+    three: 'vendor/three.min',
+    lenis: 'vendor/lenis.min'   // lenis 1.1.13 (smooth wheel scrolling)
   };
 
   var paths = USE_LOCAL_VENDOR ? LOCAL : CDN;
